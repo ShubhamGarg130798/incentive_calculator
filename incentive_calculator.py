@@ -63,16 +63,8 @@ def format_currency(amount):
     """Format amount as Indian currency"""
     return f"₹{amount:,.0f}"
 
-def calculate_incentives(recovery_data, monthly_target, min_incentive_limit, is_rupees_mode, num_managers, exec_per_manager):
+def calculate_incentives(recovery_data, monthly_target, min_incentive_limit, num_managers, exec_per_manager):
     """Calculate all incentives based on recovery data"""
-    
-    # Convert to lakhs for internal calculations
-    if is_rupees_mode:
-        monthly_target_lakhs = monthly_target / 100000
-        min_limit_lakhs = min_incentive_limit / 100000
-    else:
-        monthly_target_lakhs = monthly_target
-        min_limit_lakhs = min_incentive_limit
     
     total_recovery = 0
     manager_recoveries = []
@@ -85,11 +77,6 @@ def calculate_incentives(recovery_data, monthly_target, min_incentive_limit, is_
         for j in range(1, exec_per_manager + 1):
             exec_id = f"manager_{i}_exec_{j}"
             recovery = recovery_data.get(exec_id, 0)
-            
-            # Convert to lakhs for internal calculations
-            if is_rupees_mode and recovery > 0:
-                recovery = recovery / 100000
-            
             executive_recoveries.append(recovery)
             manager_total += recovery
         
@@ -100,12 +87,12 @@ def calculate_incentives(recovery_data, monthly_target, min_incentive_limit, is_
         total_recovery += manager_total
     
     # Check minimum limit
-    if total_recovery < min_limit_lakhs:
+    if total_recovery < min_incentive_limit:
         return {
             'eligible': False,
             'total_recovery': total_recovery * 100000,
-            'target_achievement': (total_recovery / monthly_target_lakhs) * 100 if monthly_target_lakhs > 0 else 0,
-            'warning_message': f"Minimum recovery of ₹{min_limit_lakhs:.2f} lakhs must be achieved for incentives to be paid. Current: ₹{total_recovery:.2f} lakhs",
+            'target_achievement': (total_recovery / monthly_target) * 100 if monthly_target > 0 else 0,
+            'warning_message': f"Minimum recovery of ₹{min_incentive_limit:.2f} lakhs must be achieved for incentives to be paid. Current: ₹{total_recovery:.2f} lakhs",
             'executive_incentives': {},
             'manager_incentives': {},
             'head_incentive': 0,
@@ -166,7 +153,7 @@ def calculate_incentives(recovery_data, monthly_target, min_incentive_limit, is_
     return {
         'eligible': True,
         'total_recovery': total_recovery * 100000,
-        'target_achievement': (total_recovery / monthly_target_lakhs) * 100 if monthly_target_lakhs > 0 else 0,
+        'target_achievement': (total_recovery / monthly_target) * 100 if monthly_target > 0 else 0,
         'executive_incentives': executive_incentives,
         'manager_incentives': manager_incentives,
         'head_incentive': head_incentive * 100000,
@@ -216,36 +203,20 @@ def main():
     
     # Target settings
     st.sidebar.subheader("Target Settings")
-    currency_mode = st.sidebar.radio(
-        "Currency Mode",
-        options=["Lakhs", "Rupees"],
-        index=0,
-        help="Choose input currency format"
-    )
-    is_rupees_mode = currency_mode == "Rupees"
-    
-    if is_rupees_mode:
-        default_target = 3100000
-        default_min = 3100000
-        currency_label = "₹ Rupees"
-    else:
-        default_target = 31
-        default_min = 31
-        currency_label = "₹ Lakhs"
     
     monthly_target = st.sidebar.number_input(
-        f"Monthly Recovery Target ({currency_label})",
-        min_value=0.01 if not is_rupees_mode else 1000,
-        value=float(default_target),
-        step=0.01 if not is_rupees_mode else 1000.0,
+        "Monthly Recovery Target (₹ Lakhs)",
+        min_value=0.01,
+        value=31.0,
+        step=0.01,
         help="Monthly recovery target for the team"
     )
     
     min_incentive_limit = st.sidebar.number_input(
-        f"Minimum Recovery for Incentive ({currency_label})",
-        min_value=0.0 if not is_rupees_mode else 0,
-        value=float(default_min),
-        step=0.01 if not is_rupees_mode else 1000.0,
+        "Minimum Recovery for Incentive (₹ Lakhs)",
+        min_value=0.0,
+        value=31.0,
+        step=0.01,
         help="Minimum recovery required to be eligible for incentives"
     )
     
@@ -255,16 +226,16 @@ def main():
     
     with col1:
         if st.button("High Performance", help="Fill with high performance sample data"):
-            fill_sample_data("high", is_rupees_mode)
+            fill_sample_data("high")
         if st.button("Minimum Target", help="Fill with minimum target data"):
-            fill_sample_data("minimum", is_rupees_mode)
+            fill_sample_data("minimum")
     
     with col2:
         if st.button("Medium Performance", help="Fill with medium performance data"):
-            fill_sample_data("medium", is_rupees_mode)
+            fill_sample_data("medium")
         if st.button("Clear All", help="Clear all recovery data"):
             st.session_state.recovery_data = {}
-            st.experimental_rerun()
+            st.rerun()
     
     # Main content area
     col1, col2, col3, col4 = st.columns(4)
@@ -274,7 +245,6 @@ def main():
         st.session_state.recovery_data,
         monthly_target,
         min_incentive_limit,
-        is_rupees_mode,
         num_managers,
         exec_per_manager
     )
@@ -313,11 +283,10 @@ def main():
         </div>
         """, unsafe_allow_html=True)
     else:
-        unit = "rupees" if is_rupees_mode else "lakhs"
-        display_total = results['total_recovery'] if is_rupees_mode else results['total_recovery'] / 100000
+        display_total = results['total_recovery'] / 100000
         st.markdown(f"""
         <div class="success-box">
-            <strong>✅ Great!</strong> Team achieved ₹{display_total:,.0f} {unit} recovery ({results['target_achievement']:.1f}% of target). Incentives calculated successfully!
+            <strong>✅ Great!</strong> Team achieved ₹{display_total:,.2f} lakhs recovery ({results['target_achievement']:.1f}% of target). Incentives calculated successfully!
         </div>
         """, unsafe_allow_html=True)
     
@@ -325,7 +294,7 @@ def main():
     
     # Recovery input section
     st.header("📝 Enter Collection Amounts")
-    st.markdown(f"Enter the recovery amount (in {currency_label.lower()}) for each executive:")
+    st.markdown("Enter the recovery amount (in lakhs) for each executive:")
     
     # Create tabs for each manager
     manager_tabs = st.tabs([f"Manager {i+1}" for i in range(num_managers)])
@@ -343,10 +312,10 @@ def main():
                     current_value = st.session_state.recovery_data.get(exec_id, 0.0)
                     
                     recovery_amount = st.number_input(
-                        f"Executive {j+1}",
+                        f"Executive {j+1}(₹ Lakhs)",
                         min_value=0.0,
                         value=float(current_value),
-                        step=0.01 if not is_rupees_mode else 1000.0,
+                        step=0.01,
                         key=exec_id,
                         help=f"Recovery amount for Executive {j+1}"
                     )
@@ -368,7 +337,7 @@ def main():
             
             col_a, col_b = st.columns(2)
             with col_a:
-                st.metric(f"Manager {i+1} Recovery", format_currency(manager_recovery))
+                st.metric(f"Manager {i+1} Recovery", f"₹{manager_recovery:.2f} lakhs")
             
             with col_b:
                 if results['eligible']:
@@ -385,7 +354,7 @@ def main():
     
     with col1:
         if st.button("📄 Generate CSV Report"):
-            csv_data = generate_csv_report(results, num_managers, exec_per_manager, is_rupees_mode)
+            csv_data = generate_csv_report(results, num_managers, exec_per_manager)
             st.download_button(
                 label="Download CSV",
                 data=csv_data,
@@ -400,9 +369,9 @@ def main():
     with col3:
         if st.button("🔄 Reset All Data"):
             st.session_state.recovery_data = {}
-            st.experimental_rerun()
+            st.rerun()
 
-def fill_sample_data(data_type, is_rupees_mode):
+def fill_sample_data(data_type):
     """Fill sample data based on type"""
     sample_configs = {
         'high': {'base': 3, 'variance': 2},
@@ -413,6 +382,9 @@ def fill_sample_data(data_type, is_rupees_mode):
     
     config = sample_configs.get(data_type, sample_configs['medium'])
     
+    # Clear existing data first
+    st.session_state.recovery_data = {}
+    
     for i in range(1, st.session_state.num_managers + 1):
         for j in range(1, st.session_state.exec_per_manager + 1):
             exec_id = f"manager_{i}_exec_{j}"
@@ -420,13 +392,9 @@ def fill_sample_data(data_type, is_rupees_mode):
             random_value = config['base'] + np.random.uniform(-config['variance'], config['variance'])
             final_value = max(0, random_value)  # Ensure non-negative
             
-            # Convert to rupees if needed
-            if is_rupees_mode:
-                final_value = final_value * 100000
-            
             st.session_state.recovery_data[exec_id] = round(final_value, 2)
     
-    st.experimental_rerun()
+    st.rerun()
 
 def generate_csv_report(results, num_managers, exec_per_manager):
     """Generate CSV report data"""
@@ -443,7 +411,7 @@ def generate_csv_report(results, num_managers, exec_per_manager):
     
     # Add executive details
     data.append(['EXECUTIVE DETAILS', '', '', ''])
-    data.append(['Manager', 'Executive', 'Recovery', 'Incentive'])
+    data.append(['Manager', 'Executive', 'Recovery (Lakhs)', 'Incentive'])
     
     if results['eligible']:
         for i in range(1, num_managers + 1):
@@ -451,12 +419,12 @@ def generate_csv_report(results, num_managers, exec_per_manager):
                 exec_id = f"manager_{i}_exec_{j}"
                 recovery = st.session_state.recovery_data.get(exec_id, 0)
                 incentive = results['executive_incentives'].get(exec_id, 0)
-                data.append([f'Manager {i}', f'Executive {j}', f'{recovery}', format_currency(incentive)])
+                data.append([f'Manager {i}', f'Executive {j}', f'{recovery:.2f}', format_currency(incentive)])
     
     # Add manager details
     data.append(['', '', '', ''])
     data.append(['MANAGER DETAILS', '', '', ''])
-    data.append(['Manager', 'Team Recovery', 'Incentive', ''])
+    data.append(['Manager', 'Team Recovery (Lakhs)', 'Incentive', ''])
     
     if results['eligible']:
         for i in range(1, num_managers + 1):
@@ -465,7 +433,7 @@ def generate_csv_report(results, num_managers, exec_per_manager):
                 for j in range(exec_per_manager)
             ])
             manager_incentive = results['manager_incentives'].get(f"manager_{i}", 0)
-            data.append([f'Manager {i}', f'{manager_recovery}', format_currency(manager_incentive), ''])
+            data.append([f'Manager {i}', f'{manager_recovery:.2f}', format_currency(manager_incentive), ''])
     
     # Convert to CSV
     output = StringIO()
@@ -490,7 +458,7 @@ def show_detailed_report(results, num_managers, exec_per_manager):
                 exec_data.append({
                     'Manager': f'Manager {i}',
                     'Executive': f'Executive {j}',
-                    'Recovery': format_currency(recovery),
+                    'Recovery (Lakhs)': f'₹{recovery:.2f}',
                     'Incentive': format_currency(incentive)
                 })
         
@@ -507,7 +475,7 @@ def show_detailed_report(results, num_managers, exec_per_manager):
             manager_incentive = results['manager_incentives'].get(f"manager_{i}", 0)
             mgr_data.append({
                 'Manager': f'Manager {i}',
-                'Team Recovery': format_currency(manager_recovery),
+                'Team Recovery (Lakhs)': f'₹{manager_recovery:.2f}',
                 'Incentive': format_currency(manager_incentive)
             })
         
