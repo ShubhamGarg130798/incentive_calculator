@@ -102,7 +102,7 @@ def calculate_incentives(recovery_data, monthly_target, min_incentive_limit, num
         }
     
     # Calculate incentive pool (20% of total recovery)
-    total_pool_amount = total_recovery * 0.20
+    total_pool_amount = (total_recovery-min_incentive_limit) * 0.20
     
     # Allocate pool between levels
     executive_pool = total_pool_amount * 0.60  # 60%
